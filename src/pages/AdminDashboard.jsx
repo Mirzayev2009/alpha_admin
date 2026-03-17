@@ -8,10 +8,16 @@ import {
   Phone,
   MapPin,
   MessageSquare,
+  MessageSquareText,
   Loader2,
   LogOut,
   Users,
   MessagesSquare,
+  Trash2,
+  Plus,
+  Globe,
+  User,
+  Quote,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,24 +26,22 @@ import { toast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
-import { createClient } from "@supabase/supabase-js";
+
+// ✅ Import Supabase clients from the centralized file
+import { supabase, supabaseAdmin } from "@/lib/supabaseClient";
 
 const BASE_URL = "https://alpha-backend-iieo.onrender.com";
-
-const SUPABASE_URL = "https://hmjbepqisyfqctddgqwj.supabase.co";
-const SUPABASE_ANON_KEY_n1 = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtamJlcHFpc3lmcWN0ZGRncXdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1OTA1MjgsImV4cCI6MjA4MDE2NjUyOH0.xAjmb9xSutFL6JRuyblE-kn9fb06jzXyamgHEB1Ab_k";
-const SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtamJlcHFpc3lmcWN0ZGRncXdqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDU5MDUyOCwiZXhwIjoyMDgwMTY2NTI4fQ.o-iPHOLzGqesJMwOjwWuX68WhlNPPi_XphxL8ulPaZc";
-
-// Supabase client for registrations (using anon key)
-const supabaseRegistrations = createClient(SUPABASE_URL, SUPABASE_ANON_KEY_n1);
-
-// Supabase client for contact messages (using service key)
-const supabaseContact = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("registrations");
   const [regFilter, setRegFilter] = useState("all");
   const [contactFilter, setContactFilter] = useState("all");
+
+  // Opinion form state
+  const [opinionName, setOpinionName] = useState("");
+  const [opinionCountry, setOpinionCountry] = useState("");
+  const [opinionText, setOpinionText] = useState("");
+
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -54,11 +58,13 @@ const AdminDashboard = () => {
     navigate("/login");
   };
 
-  // Fetch registrations
+  // ──────────────────────────────────────────────
+  // REGISTRATIONS — Fetch
+  // ──────────────────────────────────────────────
   const { data: registrations = [], isLoading: regLoading } = useQuery({
     queryKey: ["Alpha_registration_data", regFilter],
     queryFn: async () => {
-      let q = supabaseRegistrations
+      let q = supabase
         .from("Alpha_registration_data")
         .select("*")
         .order("created_at", { ascending: false });
@@ -75,11 +81,13 @@ const AdminDashboard = () => {
     staleTime: 1000 * 30,
   });
 
-  // Fetch contact messages
+  // ──────────────────────────────────────────────
+  // CONTACTS — Fetch
+  // ──────────────────────────────────────────────
   const { data: contacts = [], isLoading: contactLoading } = useQuery({
     queryKey: ["Alpha_contact", contactFilter],
     queryFn: async () => {
-      let q = supabaseContact
+      let q = supabaseAdmin
         .from("Alpha_contact")
         .select("*")
         .order("created_at", { ascending: false });
@@ -92,7 +100,27 @@ const AdminDashboard = () => {
     staleTime: 1000 * 30,
   });
 
-  // Update registration status
+  // ──────────────────────────────────────────────
+  // OPINIONS — Fetch all opinions from Supabase
+  // ──────────────────────────────────────────────
+  const { data: opinions = [], isLoading: opinionsLoading } = useQuery({
+    queryKey: ["Alpha-opinion"],
+    queryFn: async () => {
+      const { data, error } = await supabaseAdmin
+        .from("Alpha-opinion")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw new Error("Failed to fetch opinions");
+      return Array.isArray(data) ? data : [];
+    },
+    keepPreviousData: true,
+    staleTime: 1000 * 30,
+  });
+
+  // ──────────────────────────────────────────────
+  // REGISTRATIONS — Update status
+  // ──────────────────────────────────────────────
   const updateRegStatusMutation = useMutation({
     mutationFn: async ({ id, status }) => {
       const response = await fetch(
@@ -122,14 +150,16 @@ const AdminDashboard = () => {
     },
   });
 
-  // Delete contact message
+  // ──────────────────────────────────────────────
+  // CONTACTS — Delete
+  // ──────────────────────────────────────────────
   const deleteContactMutation = useMutation({
     mutationFn: async (id) => {
-      const { error } = await supabaseContact
+      const { error } = await supabaseAdmin
         .from("Alpha_contact")
         .delete()
         .eq("id", id);
-      
+
       if (error) throw error;
       return { id };
     },
@@ -149,6 +179,53 @@ const AdminDashboard = () => {
     },
   });
 
+  // ──────────────────────────────────────────────
+  // OPINIONS — Insert a new opinion
+  // ──────────────────────────────────────────────
+  const insertOpinionMutation = useMutation({
+    mutationFn: async (newOpinion) => {
+      const { data, error } = await supabaseAdmin
+        .from("Alpha-opinion")
+        .insert(newOpinion)
+        .select();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Alpha-opinion"] });
+      setOpinionName("");
+      setOpinionCountry("");
+      setOpinionText("");
+      sonnerToast.success("Opinion added successfully!");
+    },
+    onError: (error) => {
+      sonnerToast.error("Failed to add opinion: " + error.message);
+    },
+  });
+
+  // ──────────────────────────────────────────────
+  // OPINIONS — Delete an opinion
+  // ──────────────────────────────────────────────
+  const deleteOpinionMutation = useMutation({
+    mutationFn: async (id) => {
+      const { error } = await supabaseAdmin
+        .from("Alpha-opinion")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+      return { id };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Alpha-opinion"] });
+      sonnerToast.success("Opinion deleted successfully!");
+    },
+    onError: (error) => {
+      sonnerToast.error("Failed to delete opinion: " + error.message);
+    },
+  });
+
   const handleRegStatusChange = (id, newStatus) => {
     updateRegStatusMutation.mutate({ id, status: newStatus });
   };
@@ -159,8 +236,31 @@ const AdminDashboard = () => {
     }
   };
 
-  const regUndoneCount = registrations.filter((r) => r.status === "undone").length;
-  const regDoneCount = registrations.filter((r) => r.status === "done").length;
+  const handleOpinionSubmit = (e) => {
+    e.preventDefault();
+    if (!opinionName.trim() || !opinionCountry.trim() || !opinionText.trim()) {
+      sonnerToast.error("Please fill in all fields");
+      return;
+    }
+    insertOpinionMutation.mutate({
+      tourist_name: opinionName.trim(),
+      tourist_country: opinionCountry.trim(),
+      tourist_opinion: opinionText.trim(),
+    });
+  };
+
+  const handleOpinionDelete = (id) => {
+    if (confirm("Are you sure you want to delete this opinion?")) {
+      deleteOpinionMutation.mutate(id);
+    }
+  };
+
+  const regUndoneCount = registrations.filter(
+    (r) => r.status === "undone"
+  ).length;
+  const regDoneCount = registrations.filter(
+    (r) => r.status === "done"
+  ).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
@@ -175,7 +275,7 @@ const AdminDashboard = () => {
               Admin Dashboard
             </h1>
             <p className="text-muted-foreground">
-              Manage registrations and contact messages
+              Manage registrations, contact messages, and tourist opinions
             </p>
           </motion.div>
           <Button variant="outline" onClick={handleLogout}>
@@ -185,9 +285,16 @@ const AdminDashboard = () => {
         </div>
 
         {/* Main Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="registrations" className="flex items-center gap-2">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="space-y-6"
+        >
+          <TabsList className="grid w-full max-w-xl grid-cols-3">
+            <TabsTrigger
+              value="registrations"
+              className="flex items-center gap-2"
+            >
               <Users className="w-4 h-4" />
               Registrations
             </TabsTrigger>
@@ -195,9 +302,15 @@ const AdminDashboard = () => {
               <MessagesSquare className="w-4 h-4" />
               Contact Messages
             </TabsTrigger>
+            <TabsTrigger value="opinions" className="flex items-center gap-2">
+              <MessageSquareText className="w-4 h-4" />
+              Tourist Opinions
+            </TabsTrigger>
           </TabsList>
 
-          {/* REGISTRATIONS TAB */}
+          {/* ═══════════════════════════════════════ */}
+          {/* REGISTRATIONS TAB                      */}
+          {/* ═══════════════════════════════════════ */}
           <TabsContent value="registrations" className="space-y-6">
             {/* Stats Cards */}
             <motion.div
@@ -209,7 +322,9 @@ const AdminDashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">Total</p>
-                    <p className="text-3xl font-bold">{registrations.length}</p>
+                    <p className="text-3xl font-bold">
+                      {registrations.length}
+                    </p>
                   </div>
                   <Users className="w-12 h-12 text-primary opacity-20" />
                 </div>
@@ -217,7 +332,9 @@ const AdminDashboard = () => {
               <Card className="p-6 border-l-4 border-l-warning">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground mb-1">Pending</p>
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Pending
+                    </p>
                     <p className="text-3xl font-bold">{regUndoneCount}</p>
                   </div>
                   <Clock className="w-12 h-12 text-warning opacity-20" />
@@ -226,7 +343,9 @@ const AdminDashboard = () => {
               <Card className="p-6 border-l-4 border-l-success">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground mb-1">Completed</p>
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Completed
+                    </p>
                     <p className="text-3xl font-bold">{regDoneCount}</p>
                   </div>
                   <CheckCircle2 className="w-12 h-12 text-success opacity-20" />
@@ -250,7 +369,9 @@ const AdminDashboard = () => {
               </div>
             ) : registrations.length === 0 ? (
               <Card className="p-12 text-center">
-                <p className="text-muted-foreground">No registrations found</p>
+                <p className="text-muted-foreground">
+                  No registrations found
+                </p>
               </Card>
             ) : (
               <div className="space-y-4">
@@ -268,16 +389,24 @@ const AdminDashboard = () => {
                           <div className="flex-1 space-y-3">
                             <div className="flex items-start justify-between">
                               <div>
-                                <h3 className="text-xl font-semibold mb-1">{reg.name}</h3>
+                                <h3 className="text-xl font-semibold mb-1">
+                                  {reg.name}
+                                </h3>
                                 <Badge
-                                  variant={reg.status === "done" ? "default" : "secondary"}
+                                  variant={
+                                    reg.status === "done"
+                                      ? "default"
+                                      : "secondary"
+                                  }
                                   className={
                                     reg.status === "done"
                                       ? "bg-success text-success-foreground"
                                       : "bg-warning text-warning-foreground"
                                   }
                                 >
-                                  {reg.status === "done" ? "Completed" : "Pending"}
+                                  {reg.status === "done"
+                                    ? "Completed"
+                                    : "Pending"}
                                 </Badge>
                               </div>
                             </div>
@@ -300,30 +429,46 @@ const AdminDashboard = () => {
                               )}
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <Clock className="w-4 h-4" />
-                                <span>{new Date(reg.created_at).toLocaleDateString()}</span>
+                                <span>
+                                  {new Date(
+                                    reg.created_at
+                                  ).toLocaleDateString()}
+                                </span>
                               </div>
                             </div>
                             {reg.message && (
                               <div className="flex gap-2 text-sm pt-2 border-t">
                                 <MessageSquare className="w-4 h-4 text-muted-foreground mt-1" />
-                                <p className="text-muted-foreground">{reg.message}</p>
+                                <p className="text-muted-foreground">
+                                  {reg.message}
+                                </p>
                               </div>
                             )}
                           </div>
                           <div className="flex lg:flex-col gap-2">
                             <Button
-                              onClick={() => handleRegStatusChange(reg.id, "done")}
+                              onClick={() =>
+                                handleRegStatusChange(reg.id, "done")
+                              }
                               disabled={reg.status === "done"}
-                              variant={reg.status === "done" ? "outline" : "default"}
+                              variant={
+                                reg.status === "done" ? "outline" : "default"
+                              }
                               className="flex-1 lg:flex-none"
                             >
                               <CheckCircle2 className="w-4 h-4 mr-2" />
                               Mark Done
                             </Button>
                             <Button
-                              onClick={() => handleRegStatusChange(reg.id, "undone")}
+                              onClick={() =>
+                                handleRegStatusChange(reg.id, "undone")
+                              }
                               disabled={reg.status === "undone"}
-                              variant={reg.status === "undone" ? "outline" : "secondary"}
+                              variant={
+                                reg.status === "undone"
+                                  ? "outline"
+                                  : "secondary"
+                              }
                               className="flex-1 lg:flex-none"
                             >
                               <Clock className="w-4 h-4 mr-2" />
@@ -339,7 +484,9 @@ const AdminDashboard = () => {
             )}
           </TabsContent>
 
-          {/* CONTACTS TAB */}
+          {/* ═══════════════════════════════════════ */}
+          {/* CONTACTS TAB                           */}
+          {/* ═══════════════════════════════════════ */}
           <TabsContent value="contacts" className="space-y-6">
             {/* Stats Card */}
             <motion.div
@@ -366,7 +513,9 @@ const AdminDashboard = () => {
               </div>
             ) : contacts.length === 0 ? (
               <Card className="p-12 text-center">
-                <p className="text-muted-foreground">No contact messages found</p>
+                <p className="text-muted-foreground">
+                  No contact messages found
+                </p>
               </Card>
             ) : (
               <div className="space-y-4">
@@ -383,8 +532,12 @@ const AdminDashboard = () => {
                         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                           <div className="flex-1 space-y-3">
                             <div>
-                              <h3 className="text-xl font-semibold mb-1">{contact.name}</h3>
-                              <p className="text-lg text-primary font-medium">{contact.subject}</p>
+                              <h3 className="text-xl font-semibold mb-1">
+                                {contact.name}
+                              </h3>
+                              <p className="text-lg text-primary font-medium">
+                                {contact.subject}
+                              </p>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                               <div className="flex items-center gap-2 text-muted-foreground">
@@ -393,11 +546,17 @@ const AdminDashboard = () => {
                               </div>
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <Clock className="w-4 h-4" />
-                                <span>{new Date(contact.created_at).toLocaleString()}</span>
+                                <span>
+                                  {new Date(
+                                    contact.created_at
+                                  ).toLocaleString()}
+                                </span>
                               </div>
                             </div>
                             <div className="pt-2 border-t">
-                              <p className="text-sm font-medium mb-1">Message:</p>
+                              <p className="text-sm font-medium mb-1">
+                                Message:
+                              </p>
                               <p className="text-muted-foreground whitespace-pre-wrap">
                                 {contact.message}
                               </p>
@@ -409,6 +568,179 @@ const AdminDashboard = () => {
                               variant="destructive"
                               disabled={deleteContactMutation.isPending}
                             >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ═══════════════════════════════════════ */}
+          {/* OPINIONS TAB                           */}
+          {/* ═══════════════════════════════════════ */}
+          <TabsContent value="opinions" className="space-y-6">
+            {/* Stats Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <Card className="p-6 border-l-4 border-l-primary">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Total Tourist Opinions
+                    </p>
+                    <p className="text-3xl font-bold">{opinions.length}</p>
+                  </div>
+                  <Quote className="w-12 h-12 text-primary opacity-20" />
+                </div>
+              </Card>
+            </motion.div>
+
+            {/* Add Opinion Form */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-primary" />
+                  Add New Tourist Opinion
+                </h3>
+                <form onSubmit={handleOpinionSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Tourist Name */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium flex items-center gap-2">
+                        <User className="w-4 h-4 text-muted-foreground" />
+                        Tourist Name
+                      </label>
+                      <input
+                        type="text"
+                        value={opinionName}
+                        onChange={(e) => setOpinionName(e.target.value)}
+                        placeholder="e.g. John Smith"
+                        className="w-full px-3 py-2 rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    {/* Tourist Country */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-muted-foreground" />
+                        Country
+                      </label>
+                      <input
+                        type="text"
+                        value={opinionCountry}
+                        onChange={(e) => setOpinionCountry(e.target.value)}
+                        placeholder="e.g. United States"
+                        className="w-full px-3 py-2 rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                  </div>
+                  {/* Opinion Text */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      <MessageSquareText className="w-4 h-4 text-muted-foreground" />
+                      Opinion
+                    </label>
+                    <textarea
+                      value={opinionText}
+                      onChange={(e) => setOpinionText(e.target.value)}
+                      placeholder="Write the tourist's opinion about their travel experience..."
+                      rows={4}
+                      className="w-full px-3 py-2 rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={insertOpinionMutation.isPending}
+                    className="w-full md:w-auto"
+                  >
+                    {insertOpinionMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Opinion
+                      </>
+                    )}
+                  </Button>
+                </form>
+              </Card>
+            </motion.div>
+
+            {/* Opinions List */}
+            {opinionsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : opinions.length === 0 ? (
+              <Card className="p-12 text-center">
+                <Quote className="w-12 h-12 mx-auto text-muted-foreground opacity-40 mb-4" />
+                <p className="text-muted-foreground">
+                  No tourist opinions yet. Add your first one above!
+                </p>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                <AnimatePresence mode="popLayout">
+                  {opinions.map((opinion, index) => (
+                    <motion.div
+                      key={opinion.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <Card className="p-6 hover:shadow-lg transition-shadow">
+                        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                          <div className="flex-1 space-y-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                <User className="w-5 h-5 text-primary" />
+                              </div>
+                              <div>
+                                <h3 className="text-lg font-semibold">
+                                  {opinion.tourist_name}
+                                </h3>
+                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                  <Globe className="w-3 h-3" />
+                                  <span>{opinion.tourist_country}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="pl-13">
+                              <p className="text-muted-foreground italic whitespace-pre-wrap">
+                                "{opinion.tourist_opinion}"
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Clock className="w-3 h-3" />
+                              <span>
+                                {new Date(
+                                  opinion.created_at
+                                ).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                          <div>
+                            <Button
+                              onClick={() => handleOpinionDelete(opinion.id)}
+                              variant="destructive"
+                              size="sm"
+                              disabled={deleteOpinionMutation.isPending}
+                            >
+                              <Trash2 className="w-4 h-4 mr-1" />
                               Delete
                             </Button>
                           </div>
